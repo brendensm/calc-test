@@ -21,10 +21,12 @@ tabsetPanel(type = "pills",
       selectInput("beverage_type", "Select Beverage Type:", 
                   choices = c( "Juice", "Milk", "Other"), selected = "Juice"),
       
+      textInput("beverage_name", "Beverage Name:", placeholder = "Optional"),
+      
       # Conditional Panels for Different Beverage Types
       conditionalPanel(
         condition = "input.beverage_type == 'Juice'",
-        textInput("beverage_name", "Beverage Name:", placeholder = "Optional"),
+
         numericInput("juice_serving_size", "Serving Size (oz):", 
                      min = 0, value = NULL),
         radioButtons("is_100_percent", "Is this 100% Juice?", 
@@ -33,7 +35,7 @@ tabsetPanel(type = "pills",
       
       conditionalPanel(
         condition = "input.beverage_type == 'Milk'",
-        textInput("beverage_name", "Beverage Name:", placeholder = "Optional"),
+
         radioButtons("is_flavored", "Is the milk flavored?", 
                      choices = c("Yes" = TRUE, "No" = FALSE)),
         radioButtons("is_sweetened", "Is the milk sweetened?", 
@@ -42,7 +44,7 @@ tabsetPanel(type = "pills",
       
       conditionalPanel(
         condition = "input.beverage_type == 'Other'",
-        textInput("beverage_name", "Beverage Name:", placeholder = "Optional"),
+
         numericInput("total_sugar", "Total Sugar (grams):", 
                      min = 0, value = NULL),
         numericInput("added_sugar", "Added Sugar (grams):", 
