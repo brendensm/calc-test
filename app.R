@@ -1,19 +1,72 @@
 library(shiny)
 library(dplyr)
+library(bslib)
+
+# Workaround for Chromium Issue 468227
+downloadButton <- function(...) {
+  tag <- shiny::downloadButton(...)
+  tag$attribs$download <- NULL
+  tag
+}
+
+
+# UI Start ----------------------------------------------------------------
 
 ui <- fluidPage(
+  
+  theme = bs_theme(#version = 5, bootswatch = "flatly",
+                   version = 5,
+                   primary = "#005EA2",   # USWDS primary blue
+                   secondary = "#73B3E7",
+                   success = "#00A91C",
+                   info = "#00BDE3",
+                   warning = "#FFBE2E",
+                   danger = "#D54309",
+                   
+                   #spacer = "1rem", 
+                   font_size = "16px"),
+  
+  
   tags$head(
     tags$style(HTML("
-      .green-result { color: green; font-weight: bold; }
-      .yellow-result { color: orange; font-weight: bold; }
-      .red-result { color: red; font-weight: bold; }
+    
+    .green-result { color: green; font-weight: bold; }
+  .yellow-result { color: orange; font-weight: bold; }
+  .red-result { color: red; font-weight: bold; }
+  .radio-inline { padding-left: 10px; }
+  .radio-inline span { padding-left: 2px; }
+  
+  /* Remove fixed heights and use flex for image container */
+  .card {
+    overflow: hidden;
+  }
+  
+  .card-body {
+    padding: 0.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  #recommendation {
+    max-height: 250px;
+    width: auto;
+    object-fit: contain;
+  }
+  
+  @media screen and (max-width: 768px) {
+    #recommendation {
+      max-height: 120px;
+    }
+  }
+
     "))
   ),
   
-tabsetPanel(type = "pills",
-  tabPanel("Calculator",
+navset_pill(#type = "pills",
+  nav_panel("Calculator",
   
-  titlePanel("Beverage Input Validator"),
+  titlePanel("Nutrition Calculator"),
   
   sidebarLayout(
     sidebarPanel(
@@ -30,16 +83,16 @@ tabsetPanel(type = "pills",
         numericInput("juice_serving_size", "Serving Size (oz):", 
                      min = 0, value = NULL),
         radioButtons("is_100_percent", "Is this 100% Juice?", 
-                     choices = c("Yes" = TRUE, "No" = FALSE))
+                     choices = c("Yes" = TRUE, "No" = FALSE), inline = TRUE)
       ),
       
       conditionalPanel(
         condition = "input.beverage_type == 'Milk'",
 
         radioButtons("is_flavored", "Is the milk flavored?", 
-                     choices = c("Yes" = TRUE, "No" = FALSE)),
+                     choices = c("Yes" = TRUE, "No" = FALSE), inline = TRUE),
         radioButtons("is_sweetened", "Is the milk sweetened?", 
-                     choices = c("Yes" = TRUE, "No" = FALSE))
+                     choices = c("Yes" = TRUE, "No" = FALSE), inline = TRUE)
       ),
       
       conditionalPanel(
@@ -54,40 +107,41 @@ tabsetPanel(type = "pills",
       # Submit Button
       
       
-      #radioButtons("save_data", "Save Data?", choices = c("Yes", "No"), selected = "No", inline = TRUE),
+      #radioButtons("show_data", "Show table:", choices = c("Yes", "No"), selected = "No", inline = TRUE),
       
       
       
       # Download Button
-      
-     # conditionalPanel(
-        #condition = "input.save_data == 'Yes'",
         
         actionButton("submit", "Submit"),
         
-        downloadButton("download_data", "Download Submissions")
-    #  ),
-      
-      # conditionalPanel(
-      #   condition = "input.save_data == 'No'",
-      #   actionButton("submit", "Submit"),
-      # ),
+        downloadButton("download_data", "Download table")
 
     ),
     
     mainPanel(
       
       # Color-coded Recommendation
-      uiOutput("recommendation"),
+      #uiOutput("recommendation"),
       
-      # Submissions Table
-      h3("Submitted Beverages:"),
-      tableOutput("submissions_table")
+      card(
+      imageOutput("recommendation")
+      ),#height="25%"),
+      card(class ="dt",
+     # conditionalPanel(
+        #condition = "input.show_data == 'Yes'",
+      
+      
+      #tableOutput("submissions_table")
+      
+      DT::dataTableOutput("submissions_table", width = "100%")
+      #)
+      )
     )
   )
 ),
 
-tabPanel("About",
+nav_panel("About",
          
       h2("This is an about page."),
       
@@ -97,6 +151,8 @@ tabPanel("About",
 
 )
 )
+
+# Server ------------------------------------------------------------------
 
 server <- function(input, output, session) {
   # Reactive values to store submissions
@@ -133,11 +189,11 @@ server <- function(input, output, session) {
       
       # Determine recommendation for milk
       if (input$is_flavored == "FALSE" && input$is_sweetened == "FALSE") {
-        recommendation_text <- "GO FOR IT"
+        recommendation_text <- "www/goforit.png"
         recommendation_color <- "green"
         reason <-  NA
       } else {
-        recommendation_text <- "MAYBE NOT"
+        recommendation_text <- "www/maybenot.png"
         recommendation_color <- "red"
         
         if(input$is_flavored == "FALSE" && input$is_sweetened == "TRUE"){
@@ -155,7 +211,7 @@ server <- function(input, output, session) {
         Timestamp = as.character(Sys.Date()),
         BeverageType = "Milk",
         BeverageName = input$beverage_name,
-        Recommendation = recommendation_text,
+        Recommendation = recommendation_color,
         Reason = reason,
         stringsAsFactors = FALSE
       )
@@ -184,11 +240,11 @@ server <- function(input, output, session) {
 
       # Determine recommendation for juice
       if (input$is_100_percent == "TRUE" && input$juice_serving_size <= 12) {
-        recommendation_text <- "OK SOMETIMES"
+        recommendation_text <- "www/oksometimes.png"
         recommendation_color <- "yellow"
         reason <- NA
       } else {
-        recommendation_text <- "MAYBE NOT"
+        recommendation_text <- "www/maybenot.png"
         recommendation_color <- "red"
         
         if(input$is_100_percent == "FALSE" && input$juice_serving_size <= 12){
@@ -206,7 +262,7 @@ server <- function(input, output, session) {
         Timestamp = as.character(Sys.Date()),
         BeverageType = "Juice",
         BeverageName = input$beverage_name,
-        Recommendation = recommendation_text,
+        Recommendation = recommendation_color,
         Reason = reason,
         stringsAsFactors = FALSE
       )
@@ -259,19 +315,19 @@ server <- function(input, output, session) {
       
       # Determine recommendation for other drinks
       if (input$total_sugar <= 12 && input$added_sugar == 0) {
-        recommendation_text <- "GO FOR IT"
+        recommendation_text <- "www/goforit.png"
         recommendation_color <- "green"
         
         reason <- NA
         
-      } else if ((input$total_sugar > 12 && input$total_sugar <= 24) && input$added_sugar <= 12) {
-        recommendation_text <- "OK SOMETIMES"
+      } else if (input$total_sugar <= 24 && input$added_sugar <= 12 ) {
+        recommendation_text <- "www/oksometimes.png"
         recommendation_color <- "yellow"
         
         reason <- NA
         
       } else {
-        recommendation_text <- "MAYBE NOT"
+        recommendation_text <- "www/maybenot.png"
         recommendation_color <- "red"
         
         if(!(input$total_sugar > 12 && input$total_sugar <= 24) && input$added_sugar <= 12){
@@ -289,7 +345,7 @@ server <- function(input, output, session) {
         Timestamp = as.character(Sys.Date()),
         BeverageType = "Other",
         BeverageName = input$beverage_name,
-        Recommendation = recommendation_text,
+        Recommendation = recommendation_color,
         Reason = reason,
         stringsAsFactors = FALSE
       )
@@ -314,21 +370,43 @@ server <- function(input, output, session) {
   
   
   # Render color-coded recommendation
-  output$recommendation <- renderUI({
-    validate_result <- validate_beverage()
+  output$recommendation <- renderImage({
     
-    if (!is.null(validate_result$recommendation) && validate_result$recommendation != "") {
-      div(
-        class = paste0(validate_result$color, "-result"),
-        h3(validate_result$recommendation)
-      )
-    }
-  })
+    validate_result <- validate_beverage()
+
+      if (!is.null(validate_result$recommendation) && validate_result$recommendation != "") {
+        # div(
+        #   h3(validate_result$recommendation)
+        # )
+        
+        list(
+          src = validate_result$recommendation,
+          contentType = "image/png",
+          width = "100%",
+          height = "auto",
+          alt = "Result indicator"#,
+          
+        # style= " max-width: 300px; object-fit: contain;"
+        )
+        
+      }
+    
+  }, deleteFile = FALSE)
+    
+    
+    
+    
+
   
   # Render submissions table
-  output$submissions_table <- renderTable({
-    submissions()
-  })
+  output$submissions_table <- DT::renderDataTable(submissions(), options = list(
+      scrollX = TRUE,  # Horizontal scroll on small screens
+      responsive = TRUE
+    ))
+    
+    #renderTable({
+   # submissions()
+  #})
   
   # Download handler for CSV
   output$download_data <- downloadHandler(
