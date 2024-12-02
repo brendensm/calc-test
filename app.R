@@ -1,13 +1,6 @@
 library(shiny)
 library(bslib)
 
-downloadButton <- function(...) {
-  tag <- shiny::downloadButton(...)
-  tag$attribs$download <- NULL
-  tag
-}
-
-# UI Start ----------------------------------------------------------------
 ui <- fluidPage(
   theme = bs_theme(
     version = 5,
@@ -21,9 +14,10 @@ ui <- fluidPage(
   ),
   
   tags$style("
-    .card{overflow:hidden}.card-body{padding:.5rem;display:flex;justify-content:center;align-items:center}
-    #recommendation{max-height:250px;width:auto;object-fit:contain}
-    @media screen and (max-width:768px){#recommendation{max-height:120px}}
+    .card{overflow:hidden}.card-body{padding:.5rem;display:flex;justify-content:left;align-items:left;}
+    #recommendation{max-height:200px;width:auto;object-fit:contain}
+    div#full_guidelines.shiny-image-output.shiny-bound-output img {width:65%}
+    @media screen and (max-width:768px){#recommendation{max-height:100px}div#full_guidelines.shiny-image-output.shiny-bound-output img {width:100%}}
     .green-result{color:green;font-weight:700}.yellow-result{color:orange;font-weight:700}
     .red-result{color:red;font-weight:700}.radio-inline{padding-left:10px}
     .radio-inline span{padding-left:2px}
@@ -62,14 +56,47 @@ ui <- fluidPage(
     nav_panel("About",
               div(
                 class = "mt-3",
-                h2("This is an about page."),
-                p("Here is some text on the page.")
+                
+                #card(class = "about_text",
+                card(class="about_page",
+                h2("About"),
+                
+                p("The Sugar Smart Coalition (SSC) is committed to advocacy,
+                           education, equitable practice, and policy that improves
+                           healthy food and beverage options and choices.
+                           SSC's vision is to reduce added sugar consumption 
+                           and its negative health impacts on our Michigan communities."),
+                p("SSC's beverage guidelines were developed by member
+                           dietitians in the Nutrition Guidelines Committee based on standards
+                           set by the American Heart Association, ChangeLab Solutions,
+                           Healthy Eating Research, and the National Alliance for Nutrition and Activity."),
+                p(HTML("To learn more about the Sugar Smart Coalition, visit our "),
+                   tags$a(href = "https://www.facebook.com/SugarSmartCoalition", "Facebook page"),
+                   "or ",
+                   tags$a(href = "mailto:sugarsmartcoalition@gmail.com", "email us.")),
+                
+              #)
+              #),
+              
+             # div(
+               # class = "mt-3",
+                
+                #card(
+                  
+                  h2("Full Guidelines"),
+                  
+                  imageOutput("full_guidelines")
+                  
+                  
+               )
+                
               )
+              
+              
     )
   )
 )
 
-# Server ------------------------------------------------------------------
 server <- function(input, output, session) {
   submissions <- reactiveVal(
     data.frame(
@@ -81,6 +108,18 @@ server <- function(input, output, session) {
       stringsAsFactors = FALSE
     )
   )
+  
+  output$full_guidelines <- renderImage({
+    
+    list(
+      src = "www/guidelines_full.png",
+      contentType = "image/png",
+      width = "100%",
+     # height = "auto",
+      alt = "Result indicator"
+    )
+  }, deleteFile = FALSE)
+    
   
   output$dynamic_inputs <- renderUI({
     req(input$beverage_type)
@@ -213,18 +252,50 @@ server <- function(input, output, session) {
     )
   }, deleteFile = FALSE)
   
+  # Modified table output with delete buttons
   output$submissions_table <- DT::renderDataTable({
-    req(submissions())
+    df <- submissions()
+    req(df)
+    
+    if (nrow(df) > 0) {
+      df$Delete <- paste('<button class="btn btn-danger btn-sm delete-btn" data-row="', 
+                         1:nrow(df), 
+                         '"><i class="fa fa-trash"></i></button>')
+    }
+    
     DT::datatable(
-      submissions(),
+      df,
+      colnames = c("Date", "Type", "Name", "Result", "Reason", ""),
+      escape = FALSE,
+      selection = 'none',
       options = list(
         pageLength = 10,
         scrollX = TRUE,
         processing = FALSE,
         searching = FALSE,
-        dom = 't'
+        dom = 't',
+        columnDefs = list(
+          list(
+            targets = if (nrow(df) > 0) ncol(df) - 1 else NULL,
+            className = 'dt-center'
+          )
+        )
       )
     )
+  })
+  
+  # Handle delete button clicks
+  observeEvent(input$submissions_table_cell_clicked, {
+    info <- input$submissions_table_cell_clicked
+    if (!is.null(info$col) && !is.null(info$row)) {
+      if (info$col == ncol(submissions()) + 1) {  # +1 because of the added Delete column
+        current_data <- submissions()
+        if (info$row <= nrow(current_data)) {
+          current_data <- current_data[-info$row, ]
+          submissions(current_data)
+        }
+      }
+    }
   })
   
   output$download_data <- downloadHandler(
@@ -232,7 +303,11 @@ server <- function(input, output, session) {
       paste0("beverage_data_", Sys.Date(), ".csv")
     },
     content = function(file) {
-      write.csv(submissions(), file, row.names = FALSE)
+      data_to_download <- submissions()
+      if ("Delete" %in% names(data_to_download)) {
+        data_to_download$Delete <- NULL
+      }
+      write.csv(data_to_download, file, row.names = FALSE)
     }
   )
 }
