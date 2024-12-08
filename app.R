@@ -17,18 +17,26 @@ ui <- fluidPage(
     .card{overflow:hidden}.card-body{padding:.5rem;display:flex;justify-content:left;align-items:left;}
     #recommendation{max-height:200px;width:auto;object-fit:contain}
     div#full_guidelines.shiny-image-output.shiny-bound-output img {width:65%}
-    @media screen and (max-width:768px){#recommendation{max-height:100px}div#full_guidelines.shiny-image-output.shiny-bound-output img {width:100%}}
+    .snack_page img {width:65%;}
+    @media screen and (max-width:768px){#recommendation{max-height:100px}div#full_guidelines.shiny-image-output.shiny-bound-output img {width:100%}.snack_page img {width:100%;}}
     .green-result{color:green;font-weight:700}.yellow-result{color:orange;font-weight:700}
     .red-result{color:red;font-weight:700}.radio-inline{padding-left:10px}
     .radio-inline span{padding-left:2px}
   "),
   
-  navset_pill(
+  navset_pill (
+    
+    nav_item(
+      img(src = "logo_transparent_background.png", height = "50px"),
+      style="margin-right:10px"
+    ),    
+    
+    nav_spacer(),
+    
     nav_panel("Calculator",
               div(
                 class = "mt-3",
                 titlePanel("Nutrition Calculator"),
-                
                 sidebarLayout(
                   sidebarPanel(
                     selectInput("beverage_type", "Select Beverage Type:", 
@@ -53,6 +61,19 @@ ui <- fluidPage(
               )
     ),
     
+    nav_panel("Snacks",
+              div(
+                class = "mt-3",        
+      card(class = "snack_page",
+      h2("Snack Guidelines"),
+      p("To determine if it is a green, yellow, or red category item use the", tags$a(href="https://foodplanner.healthiergeneration.org/calculator/", "USDA Smart Snacks in School Product Calculator.")),
+      
+      img(src="snack_guidelines.png")
+      
+          )
+      )
+      ),
+    
     nav_panel("About",
               div(
                 class = "mt-3",
@@ -70,10 +91,10 @@ ui <- fluidPage(
                            dietitians in the Nutrition Guidelines Committee based on standards
                            set by the American Heart Association, ChangeLab Solutions,
                            Healthy Eating Research, and the National Alliance for Nutrition and Activity."),
-                p(HTML("To learn more about the Sugar Smart Coalition, visit our "),
-                   tags$a(href = "https://www.facebook.com/SugarSmartCoalition", "Facebook page"),
+                p("To learn more about the Sugar Smart Coalition, visit our ",
+                   tags$a(href = "https://www.facebook.com/SugarSmartCoalition", "Facebook page", target = "_blank"),
                    "or ",
-                   tags$a(href = "mailto:sugarsmartcoalition@gmail.com", "email us.")),
+                   tags$a(href = "mailto:sugarsmartcoalition@gmail.com", "email us.", target = "_blank")),
                 
               #)
               #),
