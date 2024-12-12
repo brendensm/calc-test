@@ -36,7 +36,7 @@ ui <- fluidPage(
     nav_panel("Calculator",
               div(
                 class = "mt-3",
-                titlePanel("Nutrition Calculator"),
+                titlePanel("Beverage Nutrition Calculator"),
                 sidebarLayout(
                   sidebarPanel(
                     selectInput("beverage_type", "Select Beverage Type:", 
