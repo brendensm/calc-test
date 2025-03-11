@@ -1,6 +1,12 @@
 library(shiny)
 library(bslib)
 
+
+str_to_sentence <- function(text) {
+  # Convert the first letter to uppercase and keep the rest of the string unchanged
+  paste0(toupper(substr(text, 1, 1)), tolower(substr(text, 2, nchar(text))))
+}
+
 ui <- fluidPage(
   theme = bs_theme(
     version = 5,
@@ -24,6 +30,10 @@ ui <- fluidPage(
     .radio-inline span{padding-left:2px}
   "),
   
+  tags$head(
+    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css")
+  ),
+  
   navset_pill (
     
     nav_item(
@@ -33,19 +43,38 @@ ui <- fluidPage(
     
     nav_spacer(),
     
-    nav_panel("Calculator",
+    nav_panel("Beverages",
               div(
                 class = "mt-3",
                 titlePanel("Beverage Nutrition Calculator"),
                 sidebarLayout(
                   sidebarPanel(
+                    
+                    p("K-12 facilities should first use the",
+                      tags$a(href="https://foodplanner.healthiergeneration.org/calculator/", 
+                             "USDA Smart Snacks in School Product Calculator"),
+                      "to determine if a beverage is compliant with the USDA 
+                      guidelines. The SSC Beverage Calculator can then be 
+                      used to determine if a USDA-compliant beverage is in 
+                      the green or yellow category."),
+                    
                     selectInput("beverage_type", "Select Beverage Type:", 
                                 choices = c("Juice", "Milk", "Other")),
                     textInput("beverage_name", "Beverage Name:", 
                               placeholder = "Optional"),
+                    radioButtons("artificial", HTML(paste0("Does this contain artificial sweeteners?", tags$sup("1"))),
+                                 choices = c("Yes" = TRUE, "No" = FALSE), inline = TRUE),
                     uiOutput("dynamic_inputs"),
+                    
+                    h6(HTML(paste0(tags$sup("1"), "Stevia and monk fruit are not considered to be artificial sweeteners.")), 
+                       style = "font-size:.8em; font-weight:normal;"),
+                    
+                    
+                    hr(),
                     actionButton("submit", "Submit"),
-                    downloadButton("download_data", "Download table")
+                    actionButton("save_data", span(icon("download"), "Save data"))#,
+                   # downloadButton("save_data", "Save data")
+                    
                   ),
                   
                   mainPanel(
@@ -77,48 +106,69 @@ ui <- fluidPage(
     nav_panel("About",
               div(
                 class = "mt-3",
-                
+
                 #card(class = "about_text",
                 card(class="about_page",
                 h2("About"),
-                
+
                 p("The Sugar Smart Coalition (SSC) is committed to advocacy,
                            education, equitable practice, and policy that improves
                            healthy food and beverage options and choices.
-                           SSC's vision is to reduce added sugar consumption 
+                           SSC's vision is to reduce added sugar consumption
                            and its negative health impacts on our Michigan communities."),
-                p("SSC's beverage guidelines were developed by member
-                           dietitians in the Nutrition Guidelines Committee based on standards
-                           set by the American Heart Association, ChangeLab Solutions,
-                           Healthy Eating Research, and the National Alliance for Nutrition and Activity."),
-                p("To learn more about the Sugar Smart Coalition, visit our ",
+                p("SSC's beverage guidelines were developed by member dietitians in the 
+                  Nutrition Guidelines Committee based on standards set by the American Heart 
+                  Association, ChangeLab Solutions, Healthy Eating Research, and the National 
+                  Alliance for Nutrition and Activity. Using SSC’s beverage guidelines, drinks 
+                  fall into one of three categories: Green / Go For It - no added sugar, 
+                  artificial sweeteners, or sugar alcohol. Yellow / OK SOMETIMES - minimal 
+                  added sugar, zero-calorie or low-calorie sweeteners). Red / MAYBE NOT - 
+                  added sugar and caloric sweeteners."),
+                p("To learn more about the Sugar Smart Coalition, or to share any feedback with us, visit our ",
                    tags$a(href = "https://www.facebook.com/SugarSmartCoalition", "Facebook page", target = "_blank"),
                    "or ",
                    tags$a(href = "mailto:sugarsmartcoalition@gmail.com", "email us.", target = "_blank")),
-                
-              #)
-              #),
-              
-             # div(
-               # class = "mt-3",
-                
-                #card(
-                  
+
+
                   h2("Full Guidelines"),
-                  
+
                   imageOutput("full_guidelines")
-                  
-                  
+
+
                )
-                
+
               )
-              
-              
+
+
     )
+    
+    
+
+    
   )
 )
 
 server <- function(input, output, session) {
+  
+  # if(file.exists("current_data.csv")){
+  #   
+  #   submissions <- reactiveVal(read.csv("current_data.csv"))
+  #   
+  # }else{
+  #   
+  #   submissions <- reactiveVal(
+  #     data.frame(
+  #       Timestamp = character(),
+  #       BeverageType = character(),
+  #       BeverageName = character(),
+  #       Recommendation = character(),
+  #       Reason = character(),
+  #       stringsAsFactors = FALSE
+  #     )
+  #   )
+  #   
+  # }
+
   submissions <- reactiveVal(
     data.frame(
       Timestamp = character(),
@@ -174,26 +224,40 @@ server <- function(input, output, session) {
     req(input$submit, input$beverage_type)
     
     if (input$beverage_type == "Milk") {
-      req(input$is_flavored, input$is_sweetened)
+      req(input$is_flavored, input$is_sweetened, input$artificial)
       
-      if (input$is_flavored == "FALSE" && input$is_sweetened == "FALSE") {
+      
+      reason_df <- data.frame(
+        input_id = c("is_sweetened", "is_flavored", "artificial"),
+        reason_full = c("milk sweetened", "milk flavored", "contains artificial sweeteners")
+      )
+      
+      
+      if (input$is_flavored == "FALSE" && input$is_sweetened == "FALSE" && input$artificial == "FALSE") {
         recommendation_text <- "www/goforit.png"
         recommendation_color <- "green"
         reason <- NA
       } else {
         recommendation_text <- "www/maybenot.png"
         recommendation_color <- "red"
-        reason <- if(input$is_flavored == "FALSE" && input$is_sweetened == "TRUE") {
-          "Milk sweetened"
-        } else if(input$is_flavored == "TRUE" && input$is_sweetened == "FALSE") {
-          "Milk flavored"
-        } else {
-          "Milk flavored and sweetened"
-        }
+        
+        inputs <- as.logical(c(is_flavored = input$is_flavored, is_sweetened = input$is_sweetened, artificial = input$artificial))
+        
+        
+        reason <-  paste(reason_df[inputs,2], collapse = ", ") |> str_to_sentence()
+        
       }
       
     } else if (input$beverage_type == "Juice") {
       req(input$juice_serving_size, input$is_100_percent)
+      
+      inputs <- as.logical(c(juice_serving_size = ifelse(input$juice_serving_size > 12, FALSE, TRUE), is_100_percent = input$is_100_percent))
+      
+      reason_df <- data.frame(
+        input_id = c("juice_serving_size", "is_100_percent"),
+        reason_full = c("serving size > 12oz", "not 100% juice")
+      )
+      
       
       if (input$juice_serving_size <= 0) {
         return(NULL)
@@ -206,23 +270,28 @@ server <- function(input, output, session) {
       } else {
         recommendation_text <- "www/maybenot.png"
         recommendation_color <- "red"
-        reason <- if(input$is_100_percent == "FALSE" && input$juice_serving_size <= 12) {
-          "Not 100% juice"
-        } else if(input$is_100_percent == "TRUE" && input$juice_serving_size > 12) {
-          "Serving size > 12 oz"
-        } else {
-          "Not 100% juice, Serving size > 12 oz"
-        }
+        
+        
+        reason <-  paste(reason_df[!inputs,2], collapse = ", ") |> str_to_sentence()
+      
       }
       
     } else if (input$beverage_type == "Other") {
-      req(input$total_sugar, input$added_sugar)
+      req(input$total_sugar, input$added_sugar, input$artificial)
+      
+      inputs = as.logical(c(total_sugar = ifelse(input$total_sugar > 24, TRUE, FALSE), added_sugar = ifelse(input$added_sugar > 12, TRUE, FALSE), artificial = input$artificial))
+      reason_df <- data.frame(
+        input_id = c("total_sugar", "added_sugar", "artificial"),
+        reason_full = c("total sugar > 24g", "added sugar >12g", "contains artificial sweeteners")
+      )
+      
+      
       
       if (input$total_sugar < 0 || input$added_sugar < 0 || input$added_sugar > input$total_sugar) {
         return(NULL)
       }
       
-      if (input$total_sugar <= 12 && input$added_sugar == 0) {
+      if (input$total_sugar <= 12 && input$added_sugar == 0 && input$artificial == "FALSE") {
         recommendation_text <- "www/goforit.png"
         recommendation_color <- "green"
         reason <- NA
@@ -233,13 +302,8 @@ server <- function(input, output, session) {
       } else {
         recommendation_text <- "www/maybenot.png"
         recommendation_color <- "red"
-        reason <- if(!(input$total_sugar > 12 && input$total_sugar <= 24) && input$added_sugar <= 12) {
-          "Total sugar > 24g"
-        } else if((input$total_sugar > 12 && input$total_sugar <= 24) && !(input$added_sugar <= 12)) {
-          "Added sugar > 12g"
-        } else {
-          "Total sugar > 24g, Added sugar > 12g"
-        }
+        
+        reason <- paste(reason_df[inputs,2], collapse = ", ") |> str_to_sentence()
       }
     }
     
@@ -319,18 +383,40 @@ server <- function(input, output, session) {
     }
   })
   
-  output$download_data <- downloadHandler(
-    filename = function() {
-      paste0("beverage_data_", Sys.Date(), ".csv")
-    },
-    content = function(file) {
-      data_to_download <- submissions()
-      if ("Delete" %in% names(data_to_download)) {
-        data_to_download$Delete <- NULL
-      }
-      write.csv(data_to_download, file, row.names = FALSE)
+  # output$download_data <- downloadHandler(
+  #   filename = function() {
+  #     paste0("beverage_data_", Sys.Date(), ".csv")
+  #   },
+  #   content = function(file) {
+  #     data_to_download <- submissions()
+  #     if ("Delete" %in% names(data_to_download)) {
+  #       data_to_download$Delete <- NULL
+  #     }
+  #     write.csv(data_to_download, file, row.names = FALSE)
+  #   }
+  # )
+  
+  
+  observeEvent(input$save_data, {
+    
+    
+    if(file.exists("current_data.csv")){
+      o <- read.csv("current_data.csv")
+      updated <- rbind(submissions(), o)
+      write.csv(updated, "current_data.csv")
     }
-  )
+    
+    write.csv(submissions(), "current_data.csv")
+    
+    showModal(modalDialog(
+      title = "Success",
+      "Your data has been successfully saved.",
+      easyClose = TRUE,
+      footer = modalButton("OK")
+    ))
+    
+  })
+  
 }
 
 shinyApp(ui, server)
