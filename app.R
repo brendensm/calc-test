@@ -1,6 +1,7 @@
 library(shiny)
 library(bslib)
-
+library(httr)
+library(jsonlite)
 
 str_to_sentence <- function(text) {
   # Convert the first letter to uppercase and keep the rest of the string unchanged
@@ -20,18 +21,55 @@ ui <- fluidPage(
   ),
   
   tags$style("
-    .card{overflow:hidden}.card-body{padding:.5rem;display:flex;justify-content:left;align-items:left;}
-    #recommendation{max-height:200px;width:auto;object-fit:contain}
-    div#full_guidelines.shiny-image-output.shiny-bound-output img {width:65%}
-    .snack_page img {width:65%;}
-    @media screen and (max-width:768px){#recommendation{max-height:100px}div#full_guidelines.shiny-image-output.shiny-bound-output img {width:100%}.snack_page img {width:100%;}}
-    .green-result{color:green;font-weight:700}.yellow-result{color:orange;font-weight:700}
-    .red-result{color:red;font-weight:700}.radio-inline{padding-left:10px}
-    .radio-inline span{padding-left:2px}
-  "),
+  .card{overflow:hidden}.card-body{padding:.5rem;display:flex;justify-content:left;align-items:left;}
+  #recommendation{max-height:200px;width:auto;object-fit:contain}
+  div#full_guidelines.shiny-image-output.shiny-bound-output img {width:100%}
+  .snack_page img {width:65%;}
+  
+  /* Lightbox styling */
+  .lightbox-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.9);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .lightbox-content {
+    max-width: 90%;
+    max-height: 90%;
+  }
+  .lightbox-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    color: white;
+    font-size: 30px;
+    cursor: pointer;
+  }
+  .clickable-image {
+    cursor: pointer;
+  }
+  
+  @media screen and (max-width:768px){
+    #recommendation{max-height:100px}
+    div#full_guidelines.shiny-image-output.shiny-bound-output img {width:100%}
+    .snack_page img {width:100%;}
+  }
+  .green-result{color:green;font-weight:700}
+  .yellow-result{color:orange;font-weight:700}
+  .red-result{color:red;font-weight:700}
+  .radio-inline{padding-left:10px}
+  .radio-inline span{padding-left:2px}
+"),
   
   tags$head(
-    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css")
+    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"),
+    tags$script(src = "lightbox.js")  
   ),
   
   navset_pill (
@@ -66,14 +104,13 @@ ui <- fluidPage(
                                  choices = c("Yes" = TRUE, "No" = FALSE), inline = TRUE),
                     uiOutput("dynamic_inputs"),
                     
-                    h6(HTML(paste0(tags$sup("1"), "Stevia and monk fruit are not considered to be artificial sweeteners.")), 
+                    h6(HTML(paste0(tags$sup("1"), "Artificial sweeteners include acesulfame potassium, advantame, aspartame, neotame, saccharin, and sucralose. Stevia and monk fruit are not considered to be artificial sweeteners.")), 
                        style = "font-size:.8em; font-weight:normal;"),
                     
                     
                     hr(),
                     actionButton("submit", "Submit"),
-                    actionButton("save_data", span(icon("download"), "Save data"))#,
-                   # downloadButton("save_data", "Save data")
+                    actionButton("save_data", span(icon("download"), "Save data"))
                     
                   ),
                   
@@ -92,83 +129,85 @@ ui <- fluidPage(
     
     nav_panel("Snacks",
               div(
-                class = "mt-3",        
-      card(class = "snack_page",
-      h2("Snack Guidelines"),
-      p("To determine if it is a green, yellow, or red category item use the", tags$a(href="https://foodplanner.healthiergeneration.org/calculator/", "USDA Smart Snacks in School Product Calculator.")),
-      
-      img(src="snack_guidelines.png")
-      
-          )
-      )
-      ),
+                class = "mt-3",  
+                page_fillable(
+                  layout_columns( col_widths = c(7, 5),
+                                  card(
+                                    card_header("Snack Guidelines"),
+                                    card_body(
+                                      p("To determine if it is a green, yellow, or red category item use the", tags$a(href="https://foodplanner.healthiergeneration.org/calculator/", "USDA Smart Snacks in School Product Calculator.")),
+                                    )
+                                  ),
+                                  card(
+                                    # card_header("Snack Guidelines"),
+                                    card_body(
+                                      div(
+                                        class = "clickable-image",  # Add this class to make it clear it's clickable
+                                        imageOutput("snack_guidelines", height = "auto")
+                                      )
+                                    )
+                                  )
+                  )
+                )
+              )
+    ),
     
     nav_panel("About",
               div(
                 class = "mt-3",
-
-                #card(class = "about_text",
-                card(class="about_page",
-                h2("About"),
-
-                p("The Sugar Smart Coalition (SSC) is committed to advocacy,
-                           education, equitable practice, and policy that improves
-                           healthy food and beverage options and choices.
-                           SSC's vision is to reduce added sugar consumption
-                           and its negative health impacts on our Michigan communities."),
-                p("SSC's beverage guidelines were developed by member dietitians in the 
-                  Nutrition Guidelines Committee based on standards set by the American Heart 
-                  Association, ChangeLab Solutions, Healthy Eating Research, and the National 
-                  Alliance for Nutrition and Activity. Using SSC’s beverage guidelines, drinks 
-                  fall into one of three categories: Green / Go For It - no added sugar, 
-                  artificial sweeteners, or sugar alcohol. Yellow / OK SOMETIMES - minimal 
-                  added sugar, zero-calorie or low-calorie sweeteners). Red / MAYBE NOT - 
-                  added sugar and caloric sweeteners."),
-                p("To learn more about the Sugar Smart Coalition, or to share any feedback with us, visit our ",
-                   tags$a(href = "https://www.facebook.com/SugarSmartCoalition", "Facebook page", target = "_blank"),
-                   "or ",
-                   tags$a(href = "mailto:sugarsmartcoalition@gmail.com", "email us.", target = "_blank")),
-
-
-                  h2("Full Guidelines"),
-
-                  imageOutput("full_guidelines")
-
-
-               )
-
+                page_fillable(
+                  layout_columns(
+                    col_widths = c(7, 5),  
+                    
+                    card(
+                      card_header("About the Sugar Smart Coalition"),
+                      card_body(
+                        p("The Sugar Smart Coalition (SSC) is committed to advocacy,
+              education, equitable practice, and policy that improves
+              healthy food and beverage options and choices.
+              SSC's vision is to reduce added sugar consumption
+              and its negative health impacts on our Michigan communities."),
+                        p("SSC's beverage guidelines were developed by member dietitians in the 
+              Nutrition Guidelines Committee based on standards set by the American Heart 
+              Association, ChangeLab Solutions, Healthy Eating Research, and the National 
+              Alliance for Nutrition and Activity. Using SSC's beverage guidelines, drinks 
+              fall into one of three categories:"),
+                        tags$ul(
+                          tags$li(tags$strong("Green / Go For It"), " - no added sugar, artificial sweeteners, or sugar alcohol."),
+                          tags$li(tags$strong("Yellow / OK Sometimes"), " - minimal added sugar, zero-calorie or low-calorie sweeteners."),
+                          tags$li(tags$strong("Red / Maybe Not"), " - added sugar and caloric sweeteners.")
+                        ),
+                        p("To learn more about the Sugar Smart Coalition, or to share any feedback with us, visit our ",
+                          tags$a(href = "https://www.facebook.com/SugarSmartCoalition", "Facebook page", target = "_blank"),
+                          " or ",
+                          tags$a(href = "mailto:sugarsmartcoalition@gmail.com", "email us.", target = "_blank"))
+                      )
+                    ),
+                    
+                    # Right column for the image
+                    card(
+                      card_header("Full Guidelines"),
+                      card_body(
+                        div(
+                          class = "clickable-image",  # Add this class to make it clear it's clickable
+                          imageOutput("full_guidelines", height = "auto")
+                        )
+                      )
+                    )
+                  )
+                )
               )
-
-
     )
-    
-    
-
-    
+  ),
+  div(
+    id = "lightbox",
+    class = "lightbox-overlay",
+    div(class = "lightbox-close", "×"),
+    tags$img(id = "lightbox-img", class = "lightbox-content")
   )
 )
-
 server <- function(input, output, session) {
   
-  # if(file.exists("current_data.csv")){
-  #   
-  #   submissions <- reactiveVal(read.csv("current_data.csv"))
-  #   
-  # }else{
-  #   
-  #   submissions <- reactiveVal(
-  #     data.frame(
-  #       Timestamp = character(),
-  #       BeverageType = character(),
-  #       BeverageName = character(),
-  #       Recommendation = character(),
-  #       Reason = character(),
-  #       stringsAsFactors = FALSE
-  #     )
-  #   )
-  #   
-  # }
-
   submissions <- reactiveVal(
     data.frame(
       Timestamp = character(),
@@ -181,16 +220,27 @@ server <- function(input, output, session) {
   )
   
   output$full_guidelines <- renderImage({
-    
     list(
       src = "www/guidelines_full.png",
       contentType = "image/png",
       width = "100%",
-     # height = "auto",
-      alt = "Result indicator"
+      height = "auto",
+      alt = "Full Guidelines",
+      class = "clickable-image"  
     )
   }, deleteFile = FALSE)
-    
+  
+  output$snack_guidelines <- renderImage({
+    list(
+      src = "www/snack_guidelines.png",
+      contentType = "image/png",
+      width = "100%",
+      height = "auto",
+      alt = "Full Guidelines",
+      class = "clickable-image"  # Add this class to enhance user understanding
+    )
+  }, deleteFile = FALSE)
+  
   
   output$dynamic_inputs <- renderUI({
     req(input$beverage_type)
@@ -273,7 +323,7 @@ server <- function(input, output, session) {
         
         
         reason <-  paste(reason_df[!inputs,2], collapse = ", ") |> str_to_sentence()
-      
+        
       }
       
     } else if (input$beverage_type == "Other") {
@@ -383,39 +433,43 @@ server <- function(input, output, session) {
     }
   })
   
-  # output$download_data <- downloadHandler(
-  #   filename = function() {
-  #     paste0("beverage_data_", Sys.Date(), ".csv")
-  #   },
-  #   content = function(file) {
-  #     data_to_download <- submissions()
-  #     if ("Delete" %in% names(data_to_download)) {
-  #       data_to_download$Delete <- NULL
-  #     }
-  #     write.csv(data_to_download, file, row.names = FALSE)
-  #   }
-  # )
-  
-  
   observeEvent(input$save_data, {
+    # Get current data
+    current_data <- submissions()
     
-    
-    if(file.exists("current_data.csv")){
-      o <- read.csv("current_data.csv")
-      updated <- rbind(submissions(), o)
-      write.csv(updated, "current_data.csv")
+    # Clean up the data if needed
+    if ("Delete" %in% names(current_data)) {
+      current_data$Delete <- NULL
     }
     
-    write.csv(submissions(), "current_data.csv")
+    # Convert to JSON
+    json_data <- toJSON(current_data)
     
-    showModal(modalDialog(
-      title = "Success",
-      "Your data has been successfully saved.",
-      easyClose = TRUE,
-      footer = modalButton("OK")
-    ))
+    # Send data to your Google Apps Script web app
+    response <- POST(
+      url = "https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec",
+      body = json_data,
+      content_type("application/json")
+    )
     
+    # Handle the response
+    if (status_code(response) == 200) {
+      showModal(modalDialog(
+        title = "Success",
+        "Your data has been successfully saved to the shared spreadsheet.",
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    } else {
+      showModal(modalDialog(
+        title = "Error",
+        paste("Failed to save data:", content(response)),
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    }
   })
+  
   
 }
 
