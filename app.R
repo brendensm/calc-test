@@ -2,11 +2,14 @@ library(shiny)
 library(bslib)
 library(httr)
 library(jsonlite)
+library(shinyjs)
 
 str_to_sentence <- function(text) {
   # Convert the first letter to uppercase and keep the rest of the string unchanged
   paste0(toupper(substr(text, 1, 1)), tolower(substr(text, 2, nchar(text))))
 }
+
+useShinyjs()
 
 ui <- fluidPage(
   theme = bs_theme(
@@ -69,31 +72,9 @@ ui <- fluidPage(
   
   tags$head(
     tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"),
-    tags$script(src = "lightbox.js"),
-    tags$script("
-      // Function to save data to Google Apps Script
-      window.saveData = function(jsonData) {
-        const scriptUrl = 'https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec';
-        
-        // Use the browser's fetch API
-        fetch(scriptUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: jsonData
-        })
-        .then(response => response.json())
-        .then(data => {
-          console.log('Success:', data);
-          Shiny.setInputValue('save_status', {status: 'success', message: 'Data saved successfully!'});
-        })
-        .catch((error) => {
-          console.error('Error:', error);
-          Shiny.setInputValue('save_status', {status: 'error', message: 'Error: ' + error.message});
-        });
-      }
-    ")
+    tags$script(src = "lightbox.js")
+
+  
   ),
   
   navset_pill (
@@ -134,8 +115,9 @@ ui <- fluidPage(
                     
                     hr(),
                     actionButton("submit", "Submit"),
-                    actionButton("save_data", span(icon("download"), "Save data"))
-                    
+                   # actionButton("save_data", span(icon("download"), "Save data"))
+                   actionButton("save_data", span(icon("download"), "Save data"))
+                  
                   ),
                   
                   mainPanel(
@@ -229,6 +211,8 @@ ui <- fluidPage(
     div(class = "lightbox-close", "×"),
     tags$img(id = "lightbox-img", class = "lightbox-content")
   )
+  
+  
 )
 server <- function(input, output, session) {
   
@@ -457,35 +441,116 @@ server <- function(input, output, session) {
     }
   })
   
-  observeEvent(input$save_data, {
-    # Get current data
-    current_data <- submissions()
-    
-    # Convert to JSON
-    json_data <- jsonlite::toJSON(current_data)
-    
-    # Use session$sendCustomMessage to call JavaScript function
-    session$sendCustomMessage("saveData", json_data)
+  
+  observeEvent(input$save_started, {
+    showModal(modalDialog(
+      title = "Saving...",
+      "Saving data to the shared spreadsheet. Please wait.",
+      footer = NULL,
+      easyClose = FALSE
+    ))
   })
   
-  # Show modal based on save status
-  observeEvent(input$save_status, {
-    if (input$save_status$status == "success") {
+  observeEvent(input$save_result, {
+    removeModal()
+    
+    if (input$save_result$status == "success") {
       showModal(modalDialog(
         title = "Success",
-        input$save_status$message,
+        input$save_result$message,
         easyClose = TRUE,
         footer = modalButton("OK")
       ))
     } else {
       showModal(modalDialog(
         title = "Error",
-        input$save_status$message,
+        input$save_result$message,
         easyClose = TRUE,
         footer = modalButton("OK")
       ))
     }
   })
+  
+  
+  observeEvent(input$save_data, {
+    # Show saving modal
+    showModal(modalDialog(
+      title = "Saving...",
+      "Saving data to the shared spreadsheet. Please wait.",
+      footer = NULL,
+      easyClose = FALSE
+    ))
+    
+    # Get current data
+    current_data <- submissions()
+    
+    # Create JavaScript with better error handling
+    js_code <- paste0(
+      "console.log('Starting data save operation');\n",
+      "try {\n",
+      "  const tableData = ", jsonlite::toJSON(current_data), ";\n",
+      "  console.log('Data prepared:', tableData.length, 'rows');\n",
+      "  const scriptUrl = 'https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec';\n",
+      "  console.log('Using script URL:', scriptUrl);\n",
+      "  \n",
+      "  fetch(scriptUrl, {\n",
+      "    method: 'POST',\n",
+      "    headers: { 'Content-Type': 'application/json' },\n",
+      "    body: JSON.stringify(tableData)\n",
+      "  })\n",
+      "  .then(response => {\n",
+      "    console.log('Received response with status:', response.status);\n",
+      "    if (!response.ok) {\n",
+      "      throw new Error('Network response was not ok: ' + response.status);\n",
+      "    }\n",
+      "    return response.text();\n", 
+      "  })\n",
+      "  .then(text => {\n",
+      "    console.log('Response text:', text);\n",
+      "    try {\n",
+      "      const data = JSON.parse(text);\n",
+      "      console.log('Parsed JSON:', data);\n",
+      "      Shiny.setInputValue('save_result', { status: 'success', message: 'Data saved successfully!' });\n",
+      "    } catch (e) {\n",
+      "      console.error('Error parsing JSON:', e);\n",
+      "      Shiny.setInputValue('save_result', { status: 'error', message: 'Error parsing response: ' + e.message });\n",
+      "    }\n",
+      "  })\n",
+      "  .catch(error => {\n",
+      "    console.error('Fetch error:', error);\n",
+      "    Shiny.setInputValue('save_result', { status: 'error', message: 'Error: ' + error.message });\n",
+      "  });\n",
+      "} catch (error) {\n",
+      "  console.error('JavaScript error:', error);\n",
+      "  Shiny.setInputValue('save_result', { status: 'error', message: 'JavaScript error: ' + error.message });\n",
+      "}"
+    )
+    
+    # Run the JavaScript
+    shinyjs::runjs(js_code)
+  })
+  
+  # Keep this observer for handling the result
+  observeEvent(input$save_result, {
+    removeModal()
+    
+    if (input$save_result$status == "success") {
+      showModal(modalDialog(
+        title = "Success",
+        input$save_result$message,
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    } else {
+      showModal(modalDialog(
+        title = "Error",
+        input$save_result$message,
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    }
+  })
+
   
 }
 
