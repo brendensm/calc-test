@@ -69,7 +69,31 @@ ui <- fluidPage(
   
   tags$head(
     tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"),
-    tags$script(src = "lightbox.js")  
+    tags$script(src = "lightbox.js"),
+    tags$script("
+      // Function to save data to Google Apps Script
+      window.saveData = function(jsonData) {
+        const scriptUrl = 'https://script.google.com/macros/s/YOUR-SCRIPT-ID-HERE/exec';
+        
+        // Use the browser's fetch API
+        fetch(scriptUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: jsonData
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Success:', data);
+          Shiny.setInputValue('save_status', {status: 'success', message: 'Data saved successfully!'});
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          Shiny.setInputValue('save_status', {status: 'error', message: 'Error: ' + error.message});
+        });
+      }
+    ")
   ),
   
   navset_pill (
@@ -437,54 +461,31 @@ server <- function(input, output, session) {
     # Get current data
     current_data <- submissions()
     
-    # Add debugging info
-    print("Attempting to save data...")
+    # Convert to JSON
+    json_data <- jsonlite::toJSON(current_data)
     
-    tryCatch({
-      # Convert to JSON
-      json_data <- toJSON(current_data)
-      print("Data converted to JSON")
-      
-      # Send data to your Google Apps Script web app
-      print("Sending POST request...")
-      response <- POST(
-        url = "https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec",
-        body = json_data,
-        content_type("application/json"),
-        # Add detailed error handling
-        verbose(),
-        # Add longer timeout
-        timeout(20)
-      )
-      
-      # Display detailed response info
-      print(paste("Response status:", status_code(response)))
-      print(paste("Response content:", content(response, "text")))
-      
-      showModal(modalDialog(
-        title = "Save Attempt Complete",
-        HTML(paste(
-          "Status code:", status_code(response), "<br>",
-          "Response:", content(response, "text"), "<br>",
-          "Check browser console for more details."
-        )),
-        easyClose = TRUE
-      ))
-      
-    }, error = function(e) {
-      # Capture any errors that occur
-      print(paste("Error:", e$message))
-      showModal(modalDialog(
-        title = "Error",
-        HTML(paste(
-          "An error occurred:", e$message, "<br>",
-          "Check browser console for more details."
-        )),
-        easyClose = TRUE
-      ))
-    })
+    # Use session$sendCustomMessage to call JavaScript function
+    session$sendCustomMessage("saveData", json_data)
   })
   
+  # Show modal based on save status
+  observeEvent(input$save_status, {
+    if (input$save_status$status == "success") {
+      showModal(modalDialog(
+        title = "Success",
+        input$save_status$message,
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    } else {
+      showModal(modalDialog(
+        title = "Error",
+        input$save_status$message,
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    }
+  })
   
 }
 
