@@ -437,37 +437,52 @@ server <- function(input, output, session) {
     # Get current data
     current_data <- submissions()
     
-    # Clean up the data if needed
-    if ("Delete" %in% names(current_data)) {
-      current_data$Delete <- NULL
-    }
+    # Add debugging info
+    print("Attempting to save data...")
     
-    # Convert to JSON
-    json_data <- toJSON(current_data)
-    
-    # Send data to your Google Apps Script web app
-    response <- POST(
-      url = "https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec",
-      body = json_data,
-      content_type("application/json")
-    )
-    
-    # Handle the response
-    if (status_code(response) == 200) {
+    tryCatch({
+      # Convert to JSON
+      json_data <- toJSON(current_data)
+      print("Data converted to JSON")
+      
+      # Send data to your Google Apps Script web app
+      print("Sending POST request...")
+      response <- POST(
+        url = "https://script.google.com/macros/s/YOUR-SCRIPT-ID-HERE/exec",
+        body = json_data,
+        content_type("application/json"),
+        # Add detailed error handling
+        verbose(),
+        # Add longer timeout
+        timeout(20)
+      )
+      
+      # Display detailed response info
+      print(paste("Response status:", status_code(response)))
+      print(paste("Response content:", content(response, "text")))
+      
       showModal(modalDialog(
-        title = "Success",
-        "Your data has been successfully saved to the shared spreadsheet.",
-        easyClose = TRUE,
-        footer = modalButton("OK")
+        title = "Save Attempt Complete",
+        HTML(paste(
+          "Status code:", status_code(response), "<br>",
+          "Response:", content(response, "text"), "<br>",
+          "Check browser console for more details."
+        )),
+        easyClose = TRUE
       ))
-    } else {
+      
+    }, error = function(e) {
+      # Capture any errors that occur
+      print(paste("Error:", e$message))
       showModal(modalDialog(
         title = "Error",
-        paste("Failed to save data:", content(response)),
-        easyClose = TRUE,
-        footer = modalButton("OK")
+        HTML(paste(
+          "An error occurred:", e$message, "<br>",
+          "Check browser console for more details."
+        )),
+        easyClose = TRUE
       ))
-    }
+    })
   })
   
   
