@@ -448,7 +448,7 @@ server <- function(input, output, session) {
       # Send data to your Google Apps Script web app
       print("Sending POST request...")
       response <- POST(
-        url = "https://script.google.com/macros/s/YOUR-SCRIPT-ID-HERE/exec",
+        url = "https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec",
         body = json_data,
         content_type("application/json"),
         # Add detailed error handling
