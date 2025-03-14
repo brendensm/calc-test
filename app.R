@@ -73,7 +73,7 @@ ui <- fluidPage(
     tags$script("
       // Function to save data to Google Apps Script
       window.saveData = function(jsonData) {
-        const scriptUrl = 'https://script.google.com/macros/s/YOUR-SCRIPT-ID-HERE/exec';
+        const scriptUrl = 'https://script.google.com/macros/s/AKfycby6D2dpPUHUrPSzl-mXoVWGuhpYOrORQScpEsWN8zHy_01-0NORjVRgtX0VnvAFkHkHeA/exec';
         
         // Use the browser's fetch API
         fetch(scriptUrl, {
